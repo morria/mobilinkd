@@ -20,7 +20,7 @@ public struct APRSWeatherData {
 }
 
 // MARK: - APRS Parser
-public struct APRSParser {
+public struct APRSParser2 {
     
     public static func parse(frame: AX25Frame) -> APRSPacketType {
         // Convert `info` field from bytes to ASCII string

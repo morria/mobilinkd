@@ -2,21 +2,21 @@ import Foundation
 
 /// Represents a single parsed AX.25 address (callsign + SSID).
 public struct AX25Address {
-    let callsign: String
-    let ssid: Int
+    public let callsign: String
+    public let ssid: Int
     /// AX.25 encodes a “repeated” flag in digipeater paths. Not always needed for APRS,
     /// but included here in case you want to track it.
-    let hasBeenRepeated: Bool
+    public let hasBeenRepeated: Bool
 }
 
 /// Represents a parsed AX.25 frame (focusing on UI frames).
 public struct AX25Frame {
-    let destination: AX25Address
-    let source: AX25Address
-    let digipeaters: [AX25Address]
-    let control: UInt8
-    let pid: UInt8
-    let info: [UInt8]  // For APRS, this is the main payload (e.g. position/status).
+    public let destination: AX25Address
+    public let source: AX25Address
+    public let digipeaters: [AX25Address]
+    public let control: UInt8
+    public let pid: UInt8
+    public let info: [UInt8]  // For APRS, this is the main payload (e.g. position/status).
 }
 
 public extension AX25Address {

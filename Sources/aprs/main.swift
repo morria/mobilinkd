@@ -32,30 +32,12 @@ class TNC: KissTncBleManagerDelegate {
     func didReceiveData(_ data: Data) {
         print("Received data: \(data as NSData)")
 
-        // let packet = parseKISSToAPRSPacket([UInt8](data))
-        // print("Parsed packet: \(packet)")
-        let ax25packet = parseAX25UIFrame([UInt8](data))
-
-        guard ax25packet != nil else {
-            print("Failed to parse AX.25 packet.")
-            return
+        let kissParser = KISSParser()
+        let aprsParser = APRSParser()
+        kissParser.onPacketReceived = { frame in
+            aprsParser.parseAPRSFrame(frame)
         }
-        print("AX25: \(ax25packet!)")
-
-        let parsedPacket = APRSParser.parse(frame: ax25packet!)
-
-        switch parsedPacket {
-        case .message(let from, let to, let text):
-            print("Message from \(from) to \(to): \(text)")
-        case .bulletin(let text):
-            print("Bulletin: \(text)")
-        case .weather(let weather):
-            print("Weather: \(weather)")
-        case .telemetry(let data):
-            print("Telemetry: \(data)")
-        case .unknown(let raw):
-            print("Unknown payload: \(raw)")
-        }
+        kissParser.feed([UInt8](data))
     }
     
     func bluetoothUnavailable(reason: String) {
