@@ -9,3 +9,6 @@ run:
 
 clean:
 	swift package clean
+
+test:
+	swift test
