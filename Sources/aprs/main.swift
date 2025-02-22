@@ -14,17 +14,22 @@ class TNC: KissTncBleManagerDelegate {
 
         kissParser.onPacketReceived = { frame in
             do {
-                print("Received AX.25 frame:")
-                print(frame.map { String(format: "%02X", $0) }.joined(separator: " "))
                 let ax25Packet = try decodeAX25Frame(frame)
-                print("APRS message:")
-                print(ax25Packet.info.map { String(format: "%02X", $0) }.joined(separator: " "))
-                let aprsData = decodeAPRSMessage(ax25Packet.info)
-                guard aprsData != nil else {
-                    print("Failed to decode APRS message")
+                let aprsString = String(bytes: ax25Packet.info, encoding: .utf8)
+                guard aprsString != nil else {
+                    print("Failed to decode APRS string.")
                     return
                 }
-                print("\(String(describing:aprsData?.source))")
+                let aprsData = decodeAPRS(aprsString!)
+                print([
+                    String(describing:aprsData.type),
+                    ax25Packet.source.callSign,
+                    ax25Packet.destination.callSign,
+                    aprsData.sender ?? "",
+                    aprsData.receiver ?? "",
+                    ax25Packet.digipeaters.map { $0.callSign }.joined(separator: " "),
+                    aprsData.content,
+                ].joined(separator: ", "))
             } catch {
                 print("Failed to decode AX.25 frame: \(error)")
             }
