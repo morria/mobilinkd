@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:mobilinkd}",
+            "name": "Debug aprs",
+            "program": "${workspaceFolder:mobilinkd}/.build/debug/aprs",
+            "preLaunchTask": "swift: Build Debug aprs"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:mobilinkd}",
+            "name": "Release aprs",
+            "program": "${workspaceFolder:mobilinkd}/.build/release/aprs",
+            "preLaunchTask": "swift: Build Release aprs"
+        }
+    ]
+}

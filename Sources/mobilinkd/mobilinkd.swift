@@ -45,7 +45,6 @@ public class KissTncBleManager: NSObject {
             print("Central not powered on; ignoring scan request.")
             return
         }
-        print("Bluetooth is powered on. Starting scan...")
         centralManager.scanForPeripherals(
             withServices: [BLE.serviceUUID],
             options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
@@ -57,7 +56,6 @@ public class KissTncBleManager: NSObject {
     }
 
     public func connect(_ peripheral: CBPeripheral) {
-        print("Attempting to connect to \(peripheral.name ?? "Unnamed")...")
         centralManager.connect(peripheral, options: nil)
     }
 
@@ -86,7 +84,7 @@ extension KissTncBleManager: CBCentralManagerDelegate {
             // Auto-scan now that Bluetooth is on.
             startScan()
         default:
-            print("Other Bluetooth state: \(central.state.rawValue)")
+            print("Unknown Bluetooth state: \(central.state.rawValue)")
         }
     }
 
