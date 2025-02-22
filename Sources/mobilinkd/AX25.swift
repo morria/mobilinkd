@@ -39,15 +39,11 @@ public func decodeAX25Frame(_ bytes: [UInt8]) throws -> AX25Frame {
     let dest = try parseAddress()
     let src = try parseAddress()
 
-    // Collect digipeaters until "extension" bit set (lowest bit == 1).
-    var digis = [AX25Address]()
-    while idx + 7 <= bytes.count {
-        // If extension bit is set, we stop after parsing.
-        if bytes[idx+6] & 0x01 == 0x01 { 
-            digis.append(try parseAddress())
-            break
-        }
-        digis.append(try parseAddress())
+    var digipeaters = [AX25Address]()
+    while (bytes[idx - 1] & 0x01) == 0 && idx + 7 <= bytes.count {
+        let digi = try parseAddress()
+        digipeaters.append(digi)
+        if (bytes[idx - 1] & 0x01) == 0x01 { break }
     }
 
     // Next bytes: control (1 byte), PID (1 byte).
@@ -62,7 +58,7 @@ public func decodeAX25Frame(_ bytes: [UInt8]) throws -> AX25Frame {
     return AX25Frame(
         destination: dest,
         source: src,
-        digipeaters: digis,
+        digipeaters: digipeaters,
         control: control,
         pid: pid,
         info: info

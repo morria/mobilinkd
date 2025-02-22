@@ -6,10 +6,29 @@ class TNC: KissTncBleManagerDelegate {
     private var hasConnected = false
     private var currentPeripheral: CBPeripheral?
     private let kissManager: KissTncBleManager
+    private let kissParser = KISSParser()
 
-    public init() {
+    public init() throws {
         kissManager = KissTncBleManager()
         kissManager.delegate = self
+
+        kissParser.onPacketReceived = { frame in
+            do {
+                print("Received AX.25 frame:")
+                print(frame.map { String(format: "%02X", $0) }.joined(separator: " "))
+                let ax25Packet = try decodeAX25Frame(frame)
+                print("APRS message:")
+                print(ax25Packet.info.map { String(format: "%02X", $0) }.joined(separator: " "))
+                let aprsData = decodeAPRSMessage(ax25Packet.info)
+                guard aprsData != nil else {
+                    print("Failed to decode APRS message")
+                    return
+                }
+                print("\(String(describing:aprsData?.source))")
+            } catch {
+                print("Failed to decode AX.25 frame: \(error)")
+            }
+        }
     }
 
     func didDiscoverPeripheral(_ peripheral: CBPeripheral, rssi: NSNumber) {
@@ -30,13 +49,6 @@ class TNC: KissTncBleManagerDelegate {
     }
     
     func didReceiveData(_ data: Data) {
-        print("Received data: \(data as NSData)")
-
-        let kissParser = KISSParser()
-        let aprsParser = APRSParser()
-        kissParser.onPacketReceived = { frame in
-            aprsParser.parseAPRSFrame(frame)
-        }
         kissParser.feed([UInt8](data))
     }
     
@@ -46,8 +58,11 @@ class TNC: KissTncBleManagerDelegate {
     }
 }
 
-let tnc = TNC()
-
-print("Waiting for Bluetooth to power on...")
-RunLoop.main.run() // Keeps the program running until BLE events fire.
-
+do {
+    let tnc = try TNC()
+    print("Waiting for Bluetooth to power on...")
+    RunLoop.main.run() // Keeps the program running until BLE events fire.
+} catch {
+    print("Failed to initialize TNC: \(error)")
+    exit(1)
+}
