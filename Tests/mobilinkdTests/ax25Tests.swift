@@ -45,6 +45,6 @@ import Testing
     #expect(frame.digipeaters[3].callSign == "WIDE2")
     #expect(frame.control == 0x03)
     #expect(frame.pid == 0xF0)
-    // #expect(String(bytes: frame.info, encoding: .utf8) == "!4110.00NS07430.10W#PHG45")
+    // #expect(String(bytes: frame.info, encoding: .utf8) == "!4110.00NS07430.10W#PHG452")
 }
 
