@@ -5,4 +5,4 @@ A Swift package for interacting with a [MobilinkD TNC4](https://store.mobilinkd.
 * [APRS Spec](https://www.aprs.org/doc/APRS101.PDF)
 * [MobilinkD Github](https://github.com/mobilinkd?tab=repositories)
 
-See main.swift for usage.
+See [Sources/aprs/main.swift](Sources/aprs/main.swift) for usage.
