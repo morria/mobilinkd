@@ -37,11 +37,33 @@ public struct APRSMessage {
     public let content: String
     public let symbolTable: Character?
     public let symbol: Character?
+    public let latitude: String?
+    public let longitude: String?
+
+    public init(
+        type: APRSMessageType,
+        sender: String? = nil,
+        receiver: String? = nil,
+        content: String,
+        symbolTable: Character? = nil,
+        symbol: Character? = nil,
+        latitude: String? = nil,
+        longitude: String? = nil
+    ) {
+        self.type = type
+        self.sender = sender
+        self.receiver = receiver
+        self.content = content
+        self.symbolTable = symbolTable
+        self.symbol = symbol
+        self.latitude = latitude
+        self.longitude = longitude
+    }
 }
 
 public func decodeAPRS(_ info: String) -> APRSMessage {
     guard let firstChar = info.first, let messageType = APRSMessageType(rawValue: firstChar) else {
-        return APRSMessage(type: .unknown, sender: nil, receiver: nil, content: info, symbolTable: nil, symbol: nil)
+        return APRSMessage(type: .unknown, content: info)
     }
     
     let content = String(info.dropFirst())
@@ -52,7 +74,7 @@ public func decodeAPRS(_ info: String) -> APRSMessage {
         return decodeAPRSPosition(content)
     // Add other cases here as needed
     default:
-        return APRSMessage(type: messageType, sender: nil, receiver: nil, content: content, symbolTable: nil, symbol: nil)
+        return APRSMessage(type: messageType, content: content)
     }
 }
 
@@ -61,39 +83,27 @@ private func decodeAPRSPosition(_ content: String) -> APRSMessage {
     // where first / is divider, second / is symbol table, and S is symbol
     if content.count >= 20 { // Ensure content has at least 20 characters
         let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])/([0-9]{5}\.[0-9]{2}[EW])(.)(.)$"#
-        let captureRegex = try! NSRegularExpression(
-            pattern: capturePattern,
-            options: []
+        let matches = regexMatch(string: content, pattern: capturePattern)
+
+        let latitude = matches[0]
+        let longitude = matches[1]
+        let symbolTable = matches[2].first
+        let symbol = matches[3].first
+
+        return APRSMessage(
+            type: .positionNoTimestamp,
+            content: content,
+            symbolTable: symbolTable,
+            symbol: symbol,
+            latitude: latitude,
+            longitude: longitude
         )
-        let matches = captureRegex.matches(
-            in: content,
-            options: [],
-            range: NSRange(content.startIndex..<content.endIndex, in: content)
-        )
-        if let match = matches.first, match.numberOfRanges == 6 {
-            let latitudeRange = Range(match.range(at: 1), in: content)
-            let longitudeRange = Range(match.range(at: 2), in: content)
-            let symbolTableRange = Range(match.range(at: 3), in: content)
-            let symbolRange = Range(match.range(at: 4), in: content)
-            let latitude = latitudeRange.flatMap { String(content[$0]) }
-            let symbolTable = symbolTableRange.flatMap { String(content[$0]) }
-            let longitude = longitudeRange.flatMap { String(content[$0]) }
-            let symbol = symbolRange.flatMap { String(content[$0]) }
-            return APRSMessage(
-                type: .positionNoTimestamp,
-                sender: nil,
-                receiver: nil,
-                content: content,
-                symbolTable: symbolTable?.first,
-                symbol: symbol?.first
-            )
-        }
     } else if content.count >= 9 { // Handle compressed format
-        // let symbolTable = content[content.index(content.startIndex, offsetBy: 8)]
-        // let symbol = content[content.index(content.startIndex, offsetBy: 9)]
-        // return APRSMessage(type: .positionNoTimestamp, sender: nil, receiver: nil, content: content, symbolTable: symbolTable, symbol: symbol)
+        let symbolTable = content[content.index(content.startIndex, offsetBy: 8)]
+        let symbol = content[content.index(content.startIndex, offsetBy: 9)]
+        return APRSMessage(type: .positionNoTimestamp, content: content, symbolTable: symbolTable, symbol: symbol)
     }
-    return APRSMessage(type: .positionNoTimestamp, sender: nil, receiver: nil, content: content, symbolTable: nil, symbol: nil)
+    return APRSMessage(type: .positionNoTimestamp, content: content)
 }
 
 private func decodeAPRSMessage(_ data: String) -> APRSMessage {

@@ -64,6 +64,7 @@ class TNC: KissTncBleManagerDelegate {
 }
 
 do {
+    
     let tnc = try TNC()
     print("Waiting for Bluetooth to power on...")
     RunLoop.main.run() // Keeps the program running until BLE events fire.
