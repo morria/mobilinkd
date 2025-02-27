@@ -133,7 +133,7 @@ func decodeAPRSPosition(_ content: String) -> APRSMessage {
 }
 
 func decodeAPRSPositionWithTimestamp(_ content: String) -> APRSMessage {
-    let isCompressed = content.count >= 19 && content.contains("z")
+    let isCompressed = content.count <= 21 && content.contains("z")
 
     if isCompressed {
         return decodeCompressedPositionWithTimestamp(content)
@@ -144,13 +144,13 @@ func decodeAPRSPositionWithTimestamp(_ content: String) -> APRSMessage {
 
 func decodeStandardPositionWithTimestamp(_ content: String) -> APRSMessage {
     // Position with timestamp format: @HHMMSSzDDMM.mmN/DDDMM.mmW/S
-    let capturePattern = #"^([0-9]{6})z([0-9]{4}\.[0-9]{2}[NS])/([0-9]{5}\.[0-9]{2}[EW])(.)(.)$"#
+    let capturePattern = #"^([0-9]{6})z([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
     let matches = regexMatch(string: content, pattern: capturePattern)
 
     let timestamp = matches[0]
     let latitude = matches[1]
-    let longitude = matches[2]
-    let symbolTable = matches[3].first
+    let symbolTable = matches[2].first
+    let longitude = matches[3]
     let symbol = matches[4].first
 
     return APRSMessage(
@@ -171,17 +171,37 @@ func parseAPRSTimestamp(_ timestamp: String) -> Date? {
 }
 
 func decodeCompressedPositionWithTimestamp(_ content: String) -> APRSMessage {
-    // Compressed position with timestamp format: @HHMMSSzDDMM.mmN/DDDMM.mmW/S
-    let symbolTable = content[content.index(content.startIndex, offsetBy: 8)]
-    let symbol = content[content.index(content.startIndex, offsetBy: 9)]
-
-    let date = parseAPRSTimestamp(String(content.prefix(6)))
-
+    // Compressed position with timestamp format: @HHMMSSz/5L!!<*e7>7P[
+    let timestamp = String(content.prefix(6))
+    let symbolTable = content[content.index(content.startIndex, offsetBy: 7)]
+    let encodedLat = content[content.index(content.startIndex, offsetBy: 7)...content.index(content.startIndex, offsetBy: 11)]
+    let encodedLon = content[content.index(content.startIndex, offsetBy: 12)...content.index(content.startIndex, offsetBy: 16)]
+    let symbol = content[content.index(content.startIndex, offsetBy: 19)]
+    let latitude = decodeBase91(encodedLat)
+    let longitude = decodeBase91(encodedLon)
+    let date = parseAPRSTimestamp(timestamp)
     return APRSMessage(
-        type: .positionWithTimestamp, 
-        content: content, 
-        symbolTable: symbolTable, 
+        type: .positionWithTimestamp,
+        content: content,
+        symbolTable: symbolTable,
         symbol: symbol,
+        latitude: latitude,
+        longitude: longitude,
         date: date
     )
+}
+
+func decodeBase91(_ encoded: Substring) -> String {
+    let base91Chars = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
+    var value: Int = 0
+    for char in encoded {
+        if let index = base91Chars.firstIndex(of: char) {
+            value = value * 91 + index
+        }
+    }
+    let degrees = value / 380926
+    let minutes = (value % 380926) / 6351
+    // Convert Int to Double before division
+    let seconds = Double(value % 6351) / 105.0
+    return String(format: "%02d%02d.%02d", degrees, minutes, Int(seconds))
 }
