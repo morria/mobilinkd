@@ -76,8 +76,7 @@ public func decodeAPRS(_ info: String) -> APRSMessage {
     case .positionNoTimestamp:
         return decodeAPRSPosition(content)
     case .positionWithTimestamp:
-        return decodeAPRSPositionWithTimestamp(content)
-    // Add other cases here as needed
+        return decodeAPRSPosition(content)
     default:
         return APRSMessage(type: messageType, content: content)
     }
@@ -105,44 +104,54 @@ func decodeAPRSMessage(_ data: String) -> APRSMessage {
 }
 
 func decodeAPRSPosition(_ content: String) -> APRSMessage {
-    // Position format: !DDMM.mmN/DDDMM.mmW/S or compressed format
-    // where first / is divider, second / is symbol table, and S is symbol
-    if content.count >= 20 { // Ensure content has at least 20 characters
-        let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])/([0-9]{5}\.[0-9]{2}[EW])(.)(.)$"#
-        let matches = regexMatch(string: content, pattern: capturePattern)
 
-        let latitude = matches[0]
-        let longitude = matches[1]
-        let symbolTable = matches[2].first
-        let symbol = matches[3].first
-
-        return APRSMessage(
-            type: .positionNoTimestamp,
-            content: content,
-            symbolTable: symbolTable,
-            symbol: symbol,
-            latitude: latitude,
-            longitude: longitude
-        )
-    } else if content.count >= 9 { // Handle compressed format
-        let symbolTable = content[content.index(content.startIndex, offsetBy: 8)]
-        let symbol = content[content.index(content.startIndex, offsetBy: 9)]
-        return APRSMessage(type: .positionNoTimestamp, content: content, symbolTable: symbolTable, symbol: symbol)
+    switch content.count {
+        case 26:
+            // "@092345z4903.50N/07201.75W-"
+            return decodeAPRSPositionUncompressedWithTimestamp(content)
+        case 20:
+            // "@092345z/5L!!<*e7>7P["
+            return decodeAPRSPositionCompressedWithTimestamp(content)
+        case 19:
+            // "!4903.50N/07201.75W-"
+            return decodeAPRSPositionUncompressedNoTimestamp(content)
+        case 13:
+            // "!/5L!!<*e7>7P["
+            return decodeAPRSPositionCompressedNoTimestamp(content)
+        default:
+            return APRSMessage(type: .unknown, content: content)
     }
-    return APRSMessage(type: .positionNoTimestamp, content: content)
 }
 
-func decodeAPRSPositionWithTimestamp(_ content: String) -> APRSMessage {
-    let isCompressed = content.count <= 21 && content.contains("z")
+/**
+ * Decode an APRS position (compressed) with no timestamp.
+ * Example: "!4903.50N/07201.75W-"
+ */
+func decodeAPRSPositionUncompressedNoTimestamp(_ content: String) -> APRSMessage {
+    let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])/([0-9]{5}\.[0-9]{2}[EW])(.)(.)$"#
+    let matches = regexMatch(string: content, pattern: capturePattern)
 
-    if isCompressed {
-        return decodeCompressedPositionWithTimestamp(content)
-    }
+    let latitude = matches[0]
+    let longitude = matches[1]
+    let symbolTable = matches[2].first
+    let symbol = matches[3].first
 
-    return decodeStandardPositionWithTimestamp(content)
+    return APRSMessage(
+        type: .positionNoTimestamp,
+        content: content,
+        symbolTable: symbolTable,
+        symbol: symbol,
+        latitude: latitude,
+        longitude: longitude
+    )
 }
 
-func decodeStandardPositionWithTimestamp(_ content: String) -> APRSMessage {
+/**
+ * Decode an APRS position (uncompressed) with a timestamp.
+ * Exmaple: "@092345z4903.50N/07201.75W-"
+ */
+func decodeAPRSPositionUncompressedWithTimestamp(_ content: String) -> APRSMessage {
+
     // Position with timestamp format: @HHMMSSzDDMM.mmN/DDDMM.mmW/S
     let capturePattern = #"^([0-9]{6})z([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
     let matches = regexMatch(string: content, pattern: capturePattern)
@@ -164,13 +173,11 @@ func decodeStandardPositionWithTimestamp(_ content: String) -> APRSMessage {
     )
 }
 
-func parseAPRSTimestamp(_ timestamp: String) -> Date? {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HHmmss"
-    return formatter.date(from: timestamp)
-}
-
-func decodeCompressedPositionWithTimestamp(_ content: String) -> APRSMessage {
+/**
+ * Decode an APRS position (compressed) with no timestamp.
+ * Example: "@092345z/5L!!<*e7>7P["
+ */
+func decodeAPRSPositionCompressedWithTimestamp(_ content: String) -> APRSMessage {
     // Compressed position with timestamp format: @HHMMSSz/5L!!<*e7>7P[
     let timestamp = String(content.prefix(6))
     let symbolTable = content[content.index(content.startIndex, offsetBy: 7)]
@@ -189,6 +196,34 @@ func decodeCompressedPositionWithTimestamp(_ content: String) -> APRSMessage {
         longitude: longitude,
         date: date
     )
+}
+
+/**
+ * Decode an APRS position (compressed) with no timestamp.
+ * Example: "!/5L!!<*e7>7P["
+ */
+func decodeAPRSPositionCompressedNoTimestamp(_ content: String) -> APRSMessage {
+    // Compressed position with no timestamp format: !/5L!!<*e7>7P[
+    let symbolTable = content[content.index(content.startIndex, offsetBy: 0)]
+    let encodedLat = content[content.index(content.startIndex, offsetBy: 1)...content.index(content.startIndex, offsetBy: 5)]
+    let encodedLon = content[content.index(content.startIndex, offsetBy: 6)...content.index(content.startIndex, offsetBy: 10)]
+    let symbol = content[content.index(content.startIndex, offsetBy: 12)]
+    let latitude = decodeBase91(encodedLat)
+    let longitude = decodeBase91(encodedLon)
+    return APRSMessage(
+        type: .positionNoTimestamp,
+        content: content,
+        symbolTable: symbolTable,
+        symbol: symbol,
+        latitude: latitude,
+        longitude: longitude
+    )
+}
+
+func parseAPRSTimestamp(_ timestamp: String) -> Date? {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HHmmss"
+    return formatter.date(from: timestamp)
 }
 
 func decodeBase91(_ encoded: Substring) -> String {
