@@ -11,20 +11,7 @@ import Testing
     #expect(packet.content == "Hello, this is a test message!")
 }
 
-@Test func testAPRSPosition() throws {
-    // Format: !DDMM.mmN/DDDMM.mmW/S where / is symbol table and S is symbol
-    let packetString = "!4000.00N/10500.00W/>"
-    let packet = decodeAPRS(packetString)
-
-    #expect(packet.type == .positionNoTimestamp)
-    #expect(packet.sender == nil)
-    #expect(packet.receiver == nil)
-    #expect(packet.content == "4000.00N/10500.00W/>")
-    #expect(packet.symbolTable == "/")
-    #expect(packet.symbol == ">")
-}
-
-@Test func testAPRSPositionWithTimestampCompressed() throws {
+@Test func testAPRSPositionComppressedWithTimestamp() throws {
     let packetString = "@092345z/5L!!<*e7>7P["
     let packet = decodeAPRS(packetString)
     #expect(packet.type == .positionWithTimestamp)
@@ -35,7 +22,7 @@ import Testing
     #expect(packet.symbol == "[")
 }
 
-@Test func testAPRSPositionWithTimestampUncompressed() throws {
+@Test func testAPRSPositionUncompressedWithTimestamp() throws {
     let packetString = "@092345z4903.50N/07201.75W-"
     let packet = decodeAPRS(packetString)
     #expect(packet.type == .positionWithTimestamp)
@@ -46,7 +33,7 @@ import Testing
     #expect(packet.symbol == "-")
 }
 
-@Test func testAPRSPositionNoTimestampCompressed() throws {
+@Test func testAPRSPositionCompressedNoTimestamp() throws {
     let packetString = "!/5L!!<*e7>7P["
     let packet = decodeAPRS(packetString)
     #expect(packet.type == .positionNoTimestamp)
@@ -57,7 +44,7 @@ import Testing
     #expect(packet.symbol == "[")
 }
 
-@Test func testAPRSPositionNoTimestampUncompressed() throws {
+@Test func testAPRSPositionUncompressedNoTimestamp() throws {
     let packetString = "!4903.50N/07201.75W-"
     let packet = decodeAPRS(packetString)
     #expect(packet.type == .positionNoTimestamp)
