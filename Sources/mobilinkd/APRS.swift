@@ -128,12 +128,12 @@ func decodeAPRSPosition(_ content: String) -> APRSMessage {
  * Example: "!4903.50N/07201.75W-"
  */
 func decodeAPRSPositionUncompressedNoTimestamp(_ content: String) -> APRSMessage {
-    let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])/([0-9]{5}\.[0-9]{2}[EW])(.)(.)$"#
+    let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
     let matches = regexMatch(string: content, pattern: capturePattern)
 
     let latitude = matches[0]
-    let longitude = matches[1]
-    let symbolTable = matches[2].first
+    let symbolTable = matches[1].first
+    let longitude = matches[2]
     let symbol = matches[3].first
 
     return APRSMessage(
