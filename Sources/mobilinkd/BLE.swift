@@ -36,7 +36,11 @@ public class KissTncBleManager: NSObject {
     public override init() {
         super.init()
         // The delegate (self) will get centralManagerDidUpdateState(_:) calls.
-        self.centralManager = CBCentralManager(delegate: self, queue: nil)
+        
+        let options: [String: Any] = [
+            CBCentralManagerOptionRestoreIdentifierKey: "TNCBackgroundRestore"
+        ]
+        self.centralManager = CBCentralManager(delegate: self, queue: nil, options: options)
     }
 
     /// Start scanning (if Bluetooth is actually powered on).

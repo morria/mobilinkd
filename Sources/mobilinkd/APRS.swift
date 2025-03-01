@@ -1,7 +1,5 @@
 import Foundation
 
-import Foundation
-
 // MARK: - Message
 public struct MessagePacket {
     // TODO: Cannot be nil?
@@ -88,7 +86,12 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
     }
 
     private static func isCompressed(_ rawValue: String) -> Bool {
-        return rawValue.count != 19
+        // Check if the packet string contains latitude and longitude in degrees and minutes format
+        let pattern = #"([0-9]{4}\.[0-9]{2}[NS].[0-9]{5}\.[0-9]{2}[EW])"#
+        let regex = try! NSRegularExpression(pattern: pattern)
+        let range = NSRange(location: 0, length: rawValue.count - 1)
+        let match = regex.firstMatch(in: rawValue, options: [], range: range)
+        return match == nil
     }
 
     /**
@@ -101,6 +104,7 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
         let encodedLat = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 1)...rawValue.index(rawValue.startIndex, offsetBy: 5)]
         let encodedLon = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 6)...rawValue.index(rawValue.startIndex, offsetBy: 10)]
         let symbolCode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 12)]
+        let comment = String(rawValue[rawValue.index(rawValue.startIndex, offsetBy: 13)...])
 
         let latitude = decodeBase91(String(encodedLat))
         let longitude = decodeBase91(String(encodedLon))
@@ -110,8 +114,7 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
             longitude: longitude,
             symbolTable: symbolTable,
             symbolCode: symbolCode,
-            // TODO: Comment
-            comment: nil,
+            comment: comment,
             isCompressed: Bool(true)
         )
     }
@@ -121,7 +124,7 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
      * Example: "!4903.50N/07201.75W-"
      */
     private static func fromUncompressed(rawValue: String) -> Self?{
-        let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
+        let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)(.*)$"#
         let matches = regexMatch(string: rawValue, pattern: capturePattern)
 
         guard var latitude = Double(matches[0].dropLast()) else {
@@ -141,13 +144,14 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
         let symbolTable = matches[1].first
         let symbolCode = matches[3].first
 
+        let comment = matches[4]
+
         return PositionNoTimestampPacket(
             latitude: latitude,
             longitude: longitude,
             symbolTable: symbolTable,
             symbolCode: symbolCode,
-            // TODO: Get comment
-            comment: nil,
+            comment: comment,
             isCompressed: Bool(false)
         )
     }
@@ -164,6 +168,7 @@ public struct PositionWithTimestampPacket {
     public let comment: String?
 
     public var isCompressed: Bool = false
+    public var timeMode: Character
     public var type: APRSPacketType = .positionWithTimestamp
     public var description: String {
         let formatter = DateFormatter()
@@ -172,7 +177,8 @@ public struct PositionWithTimestampPacket {
 
         return isCompressed ? """
         \(self.type.rawValue)\
-        \(timestampString)z\
+        \(timestampString)\
+        \(timeMode)\
         \(symbolTable ?? " ")\
         \(encodeBase91(Double(latitude)))\
         \(encodeBase91(Double(longitude)))\
@@ -180,7 +186,8 @@ public struct PositionWithTimestampPacket {
         \(comment ?? "")
         """ : """
         \(self.type.rawValue)\
-        \(timestampString)z\
+        \(timestampString)\
+        \(timeMode)\
         \(String(format: "%07.2f", abs(latitude)))\
         \(latitude > 0 ? "N" : "S")\
         \(symbolTable ?? " ")\
@@ -191,7 +198,7 @@ public struct PositionWithTimestampPacket {
         """
     }
 
-    public init(latitude: Double, longitude: Double, timestamp: Date, symbolTable: Character?, symbolCode: Character?, comment: String?, isCompressed: Bool = false) {
+    public init(latitude: Double, longitude: Double, timestamp: Date, symbolTable: Character?, symbolCode: Character?, comment: String?, isCompressed: Bool = false, timeMode: Character) {
         self.latitude = latitude
         self.longitude = longitude
         self.timestamp = timestamp
@@ -199,6 +206,7 @@ public struct PositionWithTimestampPacket {
         self.symbolCode = symbolCode
         self.comment = comment
         self.isCompressed = isCompressed
+        self.timeMode = timeMode
     }
 
     public init?(rawValue: String) {
@@ -212,7 +220,10 @@ public struct PositionWithTimestampPacket {
     }
 
     private static func isCompressed(_ rawValue: String) -> Bool {
-        return rawValue.count != 26
+        let pattern = #"([0-9]{4}\.[0-9]{2}[NS].[0-9]{5}\.[0-9]{2}[EW])"#
+        let regex = try! NSRegularExpression(pattern: pattern)
+        let range = NSRange(location: 1, length: rawValue.count - 1)
+        return regex.firstMatch(in: rawValue, options: [], range: range) == nil
     }
 
     /**
@@ -228,7 +239,10 @@ public struct PositionWithTimestampPacket {
         let symbolCode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 19)]
         let latitude = decodeBase91(String(encodedLat))
         let longitude = decodeBase91(String(encodedLon))
-        guard let timestamp = Self.parseTimestamp(timestamp) else {
+
+        let timeMode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 6)]
+
+        guard let timestamp = Self.parseTimestamp(timestamp, timeMode: timeMode) else {
             return nil
         }
 
@@ -239,7 +253,8 @@ public struct PositionWithTimestampPacket {
             symbolTable: symbolTable,
             symbolCode: symbolCode,
             comment: nil,
-            isCompressed: Bool(true)
+            isCompressed: Bool(true),
+            timeMode: timeMode
         )
     }
 
@@ -250,31 +265,34 @@ public struct PositionWithTimestampPacket {
     private static func fromUncompressed(rawValue: String) -> Self? {
 
         // Position with timestamp format: @HHMMSSzDDMM.mmN/DDDMM.mmW/S
-        let capturePattern = #"^([0-9]{6})z([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
+        let capturePattern = #"^([0-9]{6})(.)([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)(.*)$"#
         let matches = regexMatch(string: rawValue, pattern: capturePattern)
 
         let timestamp = matches[0]
-        guard var latitude = Double(matches[1].dropLast()) else {
+        let timeMode = matches[1].first!
+        guard let timestamp = Self.parseTimestamp(timestamp, timeMode: timeMode) else {
             return nil
         }
-        if matches[1].last == "S" {
+
+        guard var latitude = Double(matches[2].dropLast()) else {
+            return nil
+        }
+        if matches[2].last == "S" {
             latitude = -latitude
         }
 
-        let symbolTable = matches[2].first
-        guard var longitude = Double(matches[3].dropLast()) else {
+        let symbolTable = matches[3].first
+        guard var longitude = Double(matches[4].dropLast()) else {
             return nil
         }
-        if matches[3].last == "W" {
+        if matches[4].last == "W" {
             longitude = -longitude
         }
-        guard let symbolCode = matches[4].first else {
+        guard let symbolCode = matches[5].first else {
             return nil
         }
 
-        guard let timestamp = Self.parseTimestamp(timestamp) else {
-            return nil
-        }
+        let comment = matches[6]
 
         return PositionWithTimestampPacket(
             latitude: latitude,
@@ -283,15 +301,25 @@ public struct PositionWithTimestampPacket {
             symbolTable: symbolTable,
             symbolCode: symbolCode,
             // TODO: This isn't correct.
-            comment: nil,
-            isCompressed: Bool(false)
+            comment: comment,
+            isCompressed: Bool(false),
+            timeMode: timeMode
         )
 
     }
 
-    private static func parseTimestamp(_ timestamp: String) -> Date? {
+    private static func parseTimestamp(_ timestamp: String, timeMode: Character) -> Date? {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HHmmss"
+        switch timeMode {
+        case "z":
+            formatter.dateFormat = "HHmmss"
+        case "/":
+            formatter.dateFormat = "yyMMddHHmmss"
+        case "\\":
+            formatter.dateFormat = "MMddHHmm"
+        default:
+            formatter.dateFormat = "HHmmss"
+        }
         return formatter.date(from: timestamp)
     }
 
