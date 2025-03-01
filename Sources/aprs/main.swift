@@ -20,7 +20,7 @@ class TNC: KissTncBleManagerDelegate {
                     print("Failed to decode APRS string.")
                     return
                 }
-                guard let packet = parseAPRSPacket(from: aprsString!) else {
+                guard let packet = APRSPacket(rawValue: aprsString!) else {
                     print("Failed to parse APRS packet.")
                     print(aprsString!)
                     return

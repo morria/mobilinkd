@@ -5,7 +5,7 @@ import Foundation
 @Test func testAPRSMessage() throws {
     let packetString = ":W2ASM :Hello, this is a test message!"
 
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
      case .message(let messagePacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet or packet is not of type MessagePacket.")
         return
@@ -19,7 +19,7 @@ import Foundation
 
 @Test func testAPRSBulletin() throws {
     let packetString = ":BLN1     :Bulletin broadcast test"
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
     case .message(let messagePacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
         return
@@ -32,7 +32,7 @@ import Foundation
 
 @Test func testAPRSAnnounce() throws {
     let packetString = ":ANNOUNCE :Club meeting tonight at 7pm"
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
     case .message(let messagePacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
         return
@@ -45,7 +45,7 @@ import Foundation
 
 @Test func testAPRSPositionCompressedWithTimestamp() throws {
     let packetString = "@092345z/5L!!<*e7>7P["
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
      case .positionWithTimestamp(let positionPacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
         return
@@ -68,7 +68,7 @@ import Foundation
 
 @Test func testAPRSPositionUncompressedWithTimestamp() throws {
     let packetString = "@092345z4903.50N/07201.75W-"
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
      case .positionWithTimestamp(let positionPacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
         return
@@ -91,7 +91,7 @@ import Foundation
 
 @Test func testAPRSPositionCompressedNoTimestamp() throws {
     let packetString = "!/5L!!<*e7>7P["
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
      case .positionNoTimestamp(let positionPacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
         return
@@ -106,7 +106,7 @@ import Foundation
 
 @Test func testAPRSPositionUncompressedNoTimestamp() throws {
     let packetString = "!4903.50N/07201.75W-"
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
      case .positionNoTimestamp(let positionPacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
         return
@@ -121,7 +121,7 @@ import Foundation
 
 @Test func testAPRSWeatherReport() throws {
     let packetString = "_10090556c220s004g005t077r000p000P000h50b09900" 
-    guard let packet = parseAPRSPacket(from: packetString),
+    guard let packet = APRSPacket(rawValue: packetString),
      case .weather(let weatherPacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
         return
@@ -181,7 +181,7 @@ import Foundation
     ]
 
     for (packetString, expectedType) in formats {
-        guard let packet = parseAPRSPacket(from: packetString) else {
+        guard let packet = APRSPacket(rawValue: packetString) else {
             #expect(Bool(false), "Failed to parse APRS packet from \(packetString).")
             return
         }

@@ -2,6 +2,40 @@ import Foundation
 
 import Foundation
 
+// MARK: - Message
+public struct MessagePacket {
+    // TODO: Cannot be nil?
+    public let fromCallsign: String?
+    public let toCallsign: String
+    public let messageText: String
+    public let acknowledgment: String?
+
+    public let type: APRSPacketType = .message
+    public var description: String {
+        return """
+        \(self.type.rawValue)
+        """
+    }
+
+    public init?(rawValue: String) {
+        let parts = rawValue.split(
+            separator: ":", 
+            maxSplits: 2, 
+            omittingEmptySubsequences: true
+        )
+        
+        guard parts.count == 2 else {
+            return nil
+        }
+
+        self.fromCallsign = nil
+        self.toCallsign = parts[0].trimmingCharacters(in: .whitespaces)
+        self.messageText = String(parts[1])
+        self.acknowledgment = nil
+    }
+
+}
+
 // MARK: - Position (No Timestamp)
 public struct PositionNoTimestampPacket : CustomStringConvertible {
     public let latitude: Double
@@ -10,7 +44,7 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
     public let symbolCode: Character?
     public let comment: String?
 
-    public let type: APRSPacketType = .positionNoTimestamp
+    public var type: APRSPacketType = .positionNoTimestamp
     public var description: String {
         return """
         \(self.type.rawValue)\
@@ -21,6 +55,88 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
         \(comment ?? "")
         """
     }
+
+    public init(latitude: Double, longitude: Double, symbolTable: Character?, symbolCode: Character?, comment: String?) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.symbolTable = symbolTable
+        self.symbolCode = symbolCode
+        self.comment = comment
+    }
+
+    public init?(rawValue: String) {
+        if Self.isCompressed(rawValue) {
+            guard let result = Self.fromCompressed(rawValue: rawValue) else { return nil }
+            self = result
+        } else {
+            guard let result = Self.fromUncompressed(rawValue: rawValue) else { return nil }
+            self = result
+        }
+    }
+
+    private static func isCompressed(_ rawValue: String) -> Bool {
+        return rawValue.count != 19
+    }
+
+    /**
+     * Decode an APRS position (compressed) with no timestamp.
+     * Example: "!/5L!!<*e7>7P["
+     */
+    private static func fromCompressed(rawValue: String) -> Self? {
+        // Compressed position with no timestamp format: !/5L!!<*e7>7P[
+        let symbolTable = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 0)]
+        let encodedLat = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 1)...rawValue.index(rawValue.startIndex, offsetBy: 5)]
+        let encodedLon = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 6)...rawValue.index(rawValue.startIndex, offsetBy: 10)]
+        let symbolCode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 12)]
+
+        let latitude = decodeBase91(encodedLat)
+        let longitude = decodeBase91(encodedLon)
+
+        return PositionNoTimestampPacket(
+            latitude: latitude,
+            longitude: longitude,
+            symbolTable: symbolTable,
+            symbolCode: symbolCode,
+            // TODO: Comment
+            comment: nil
+        )
+    }
+
+    /**
+     * Decode an APRS position (compressed) with no timestamp.
+     * Example: "!4903.50N/07201.75W-"
+     */
+    private static func fromUncompressed(rawValue: String) -> Self?{
+        let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
+        let matches = regexMatch(string: rawValue, pattern: capturePattern)
+
+        guard var latitude = Double(matches[0].dropLast()) else {
+            return nil
+        }
+        if matches[0].last == "S" {
+            latitude = -latitude
+        }
+
+        guard var longitude = Double(matches[2].dropLast()) else {
+            return nil
+        }
+        if matches[2].last == "W" {
+            longitude = -longitude
+        }
+
+        let symbolTable = matches[1].first
+        let symbolCode = matches[3].first
+
+        return PositionNoTimestampPacket(
+            latitude: latitude,
+            longitude: longitude,
+            symbolTable: symbolTable,
+            symbolCode: symbolCode,
+            // TODO: Get comment
+            comment: nil
+        )
+    }
+
 }
 
 // MARK: - Position (With Timestamp)
@@ -32,7 +148,7 @@ public struct PositionWithTimestampPacket {
     public let symbolCode: Character?
     public let comment: String?
 
-    public let type: APRSPacketType = .positionWithTimestamp
+    public var type: APRSPacketType = .positionWithTimestamp
     public var description: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HHmmss"
@@ -47,6 +163,108 @@ public struct PositionWithTimestampPacket {
         \(comment ?? "")
         """
     }
+
+    public init(latitude: Double, longitude: Double, timestamp: Date, symbolTable: Character?, symbolCode: Character?, comment: String?) {
+        self.latitude = latitude
+        self.longitude = longitude
+        self.timestamp = timestamp
+        self.symbolTable = symbolTable
+        self.symbolCode = symbolCode
+        self.comment = comment
+    }
+
+    public init?(rawValue: String) {
+        if Self.isCompressed(rawValue) {
+            guard let result = Self.fromCompressed(rawValue: rawValue) else { return nil }
+            self = result
+        } else {
+            guard let result = Self.fromUncompressed(rawValue: rawValue) else { return nil }
+            self = result
+        }
+    }
+
+    private static func isCompressed(_ rawValue: String) -> Bool {
+        return rawValue.count != 26
+    }
+
+    /**
+     * Decode an APRS position (compressed) with no timestamp.
+     * Example: "@092345z/5L!!<*e7>7P["
+     */
+    private static func fromCompressed(rawValue: String) -> Self? {
+        // Compressed position with timestamp format: @HHMMSSz/5L!!<*e7>7P[
+        let timestamp = String(rawValue.prefix(6))
+        let symbolTable = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 7)]
+        let encodedLat = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 7)...rawValue.index(rawValue.startIndex, offsetBy: 11)]
+        let encodedLon = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 12)...rawValue.index(rawValue.startIndex, offsetBy: 16)]
+        let symbolCode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 19)]
+        let latitude = decodeBase91(encodedLat)
+        let longitude = decodeBase91(encodedLon)
+        guard let timestamp = Self.parseTimestamp(timestamp) else {
+            return nil
+        }
+
+        return PositionWithTimestampPacket(
+            latitude: latitude,
+            longitude: longitude,
+            timestamp: timestamp,
+            symbolTable: symbolTable,
+            symbolCode: symbolCode,
+            comment: nil
+        )
+    }
+
+    /**
+     * Decode an APRS position (uncompressed) with a timestamp.
+     * Exmaple: "@092345z4903.50N/07201.75W-"
+     */
+    private static func fromUncompressed(rawValue: String) -> Self? {
+
+        // Position with timestamp format: @HHMMSSzDDMM.mmN/DDDMM.mmW/S
+        let capturePattern = #"^([0-9]{6})z([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
+        let matches = regexMatch(string: rawValue, pattern: capturePattern)
+
+        let timestamp = matches[0]
+        guard var latitude = Double(matches[1].dropLast()) else {
+            return nil
+        }
+        if matches[1].last == "S" {
+            latitude = -latitude
+        }
+
+        let symbolTable = matches[2].first
+        guard var longitude = Double(matches[3].dropLast()) else {
+            return nil
+        }
+        if matches[3].last == "W" {
+            longitude = -longitude
+        }
+        guard let symbolCode = matches[4].first else {
+            return nil
+        }
+
+        guard let timestamp = Self.parseTimestamp(timestamp) else {
+            return nil
+        }
+
+        return PositionWithTimestampPacket(
+            latitude: latitude,
+            longitude: longitude,
+            timestamp: timestamp,
+            symbolTable: symbolTable,
+            symbolCode: symbolCode,
+            // TODO: This isn't correct.
+            comment: nil
+        )
+
+    }
+
+    private static func parseTimestamp(_ timestamp: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HHmmss"
+        return formatter.date(from: timestamp)
+    }
+
 }
 
 // MARK: - Position (With Messaging)
@@ -83,51 +301,6 @@ public struct PositionWithMessagingPacket {
     // }
 }
 
-// MARK: - Status
-public struct StatusPacket {
-    public let sourceCallsign: String
-    public let statusText: String
-    public let timestamp: Date?
-
-    public let type: APRSPacketType = .status
-    public var description: String {
-        return """
-        \(self.type.rawValue)
-        """
-    }
-}
-
-// MARK: - Message
-public struct MessagePacket {
-    // TODO: Cannot be nil
-    public let fromCallsign: String?
-    public let toCallsign: String
-    public let messageText: String
-    public let acknowledgment: String?
-
-    public let type: APRSPacketType = .message
-    public var description: String {
-        return """
-        \(self.type.rawValue)
-        """
-    }
-}
-
-// MARK: - Telemetry
-public struct TelemetryPacket {
-    public let sequenceNumber: Int
-    public let analogValues: [Double]   // e.g., up to 5 channels
-    public let digitalValues: [Bool]    // e.g., up to 8 bits
-    public let comment: String?
-
-    public let type: APRSPacketType = .telemetry
-    public var description: String {
-        return """
-        \(self.type.rawValue)
-        """
-    }
-}
-
 // MARK: - Weather
 public struct WeatherPacket {
     public let latitude: Double?
@@ -149,7 +322,72 @@ public struct WeatherPacket {
         \(self.type.rawValue)
         """
     }
+
+    /**
+     * Decode an APRS weather report.
+     * Example: "_10090556c220s004g005t077r000p000P000h50b09900" 
+     */
+    public init?(rawValue: String) {
+
+        // Example: "_10090556c220s004g005t077r000p000P000h50b09900"
+        // Remove leading underscore if present
+        let data = rawValue.hasPrefix("_") ? String(rawValue.dropFirst()) : rawValue
+
+        let windDirection = matchAfterPrefix(data, prefix: "c")
+        let windSpeed     = matchAfterPrefix(data, prefix: "s")
+        let windGust      = matchAfterPrefix(data, prefix: "g")
+        let tempF         = matchAfterPrefix(data, prefix: "t")
+        let rainLastHour  = matchAfterPrefix(data, prefix: "r")
+        let rain24        = matchAfterPrefix(data, prefix: "p")
+        let rainMidnight  = matchAfterPrefix(data, prefix: "P")
+        let humidity      = matchAfterPrefix(data, prefix: "h")
+        let baro          = matchAfterPrefix(data, prefix: "b")
+
+        self.latitude = nil
+        self.longitude = nil
+        self.windDirection = Int(windDirection ?? "")
+        self.windSpeed = Int(windSpeed ?? "")
+        self.windGust = Int(windGust ?? "")
+        self.temperatureF = Double(tempF ?? "")
+        self.rainfallLastHour = Double(rainLastHour ?? "")
+        self.rainfallLast24h = Double(rain24 ?? "")
+        self.rainfallSinceMidnight = Double(rainMidnight ?? "")
+        self.humidity = Int(humidity ?? "")
+        self.pressure = Double(baro ?? "")
+        self.comment = nil
+    }
 }
+
+// MARK: - Status
+public struct StatusPacket {
+    public let sourceCallsign: String
+    public let statusText: String
+    public let timestamp: Date?
+
+    public let type: APRSPacketType = .status
+    public var description: String {
+        return """
+        \(self.type.rawValue)
+        """
+    }
+}
+
+
+// MARK: - Telemetry
+public struct TelemetryPacket {
+    public let sequenceNumber: Int
+    public let analogValues: [Double]   // e.g., up to 5 channels
+    public let digitalValues: [Bool]    // e.g., up to 8 bits
+    public let comment: String?
+
+    public let type: APRSPacketType = .telemetry
+    public var description: String {
+        return """
+        \(self.type.rawValue)
+        """
+    }
+}
+
 
 // MARK: - Object
 public struct ObjectPacket {
@@ -200,6 +438,19 @@ public struct QueryPacket {
     }
 }
 
+public enum APRSPacketType: Character, CaseIterable {
+    case message = ":"
+    case positionNoTimestamp = "!"
+    case positionWithTimestamp = "@"
+    case weatherReport = "_"
+    case telemetry = "T"
+    case object = ";"
+    case item = ")"
+    case query = "?"
+    case status = ">"
+    case unknown = " "
+}
+
 // MARK: - Unified Enum
 public enum APRSPacket: CustomStringConvertible {
     case positionNoTimestamp(PositionNoTimestampPacket)
@@ -238,22 +489,6 @@ public enum APRSPacket: CustomStringConvertible {
         }
     }
 
-}
-
-public enum APRSPacketType: Character, CaseIterable {
-    case message = ":"
-    case positionNoTimestamp = "!"
-    case positionWithTimestamp = "@"
-    case weatherReport = "_"
-    case telemetry = "T"
-    case object = ";"
-    case item = ")"
-    case query = "?"
-    case status = ">"
-    case unknown = " "
-}
-
-extension APRSPacket {
     public var type: APRSPacketType {
         switch self {
         case .message(_):
@@ -279,232 +514,53 @@ extension APRSPacket {
             return .query
         }
     }
-}
 
-public func parseAPRSPacket(from: String) -> APRSPacket? {
-
-    guard let firstChar = from.first else {
-        return nil
-    }
-
-    guard let messageType = APRSPacketType(rawValue: firstChar) else {
-        return nil
-    }
-    
-    let content = String(from.dropFirst())
-
-    switch messageType {
-    case .message:
-        guard let packet = parseAPRSMessagePacket(from: content) else {
+    public init?(rawValue: String) {
+        guard let firstChar = rawValue.first else {
             return nil
         }
-        return .message(packet)
-    case .positionNoTimestamp:
-        guard let packet = parseAPRSPositionNoTimestampPacket(from: content) else {
-            return nil
-        }
-        return .positionNoTimestamp(packet)
-    case .positionWithTimestamp:
-        guard let packet = parseAPRSPositionWithTimestampPacket(from: content) else {
-            return nil
-        }
-        return .positionWithTimestamp(packet)
-    case .weatherReport:
-        guard let packet = parseAPRSWeatherReport(from: content) else {
-            return nil
-        }
-        return .weather(packet)
-    // case .telemetry:
-    //     return decodeAPRSTelemetry(content)
-    // case .object:
-    //     return decodeAPRSObject(content)
-    // case .item:
-    //     return decodeAPRSItem(content)
-    // case .query:
-    //     return decodeAPRSQuery(content)
-    // case .status:
-    //     return decodeAPRSStatus(content)
-    default:
-        return nil
-    }
-}
 
-func parseAPRSMessagePacket(from: String) -> MessagePacket? {
-    let parts = from.split(
-        separator: ":", 
-        maxSplits: 2, 
-        omittingEmptySubsequences: true
-    )
-    
-    guard parts.count == 2 else {
-        return nil
-    }
-    
-    return MessagePacket(
-        fromCallsign: nil,
-        toCallsign: parts[0].trimmingCharacters(in: .whitespaces),
-        messageText: String(parts[1]),
-        acknowledgment: nil
-    )
-}
+        guard let messageType = APRSPacketType(rawValue: firstChar) else {
+            return nil
+        }
+        
+        let content = String(rawValue.dropFirst())
 
-func parseAPRSPositionNoTimestampPacket(from: String) -> PositionNoTimestampPacket? {
-    switch from.count {
-        case 19:
-            return parseAPRSPositionUncompressedNoTimestamp(from: from)
-        case 13:
-            return parseAPRSPositionCompressedNoTimestamp(from: from)
+        switch messageType {
+        case .message:
+            guard let packet = MessagePacket(rawValue: content) else {
+                return nil
+            }
+            self = .message(packet)
+        case .positionNoTimestamp:
+            guard let packet = PositionNoTimestampPacket(rawValue: content) else {
+                return nil
+            }
+            self = .positionNoTimestamp(packet)
+        case .positionWithTimestamp:
+            guard let packet = PositionWithTimestampPacket(rawValue: content) else {
+                return nil
+            }
+            self = .positionWithTimestamp(packet)
+        case .weatherReport:
+            guard let packet = WeatherPacket(rawValue: content) else {
+                return nil
+            }
+            self = .weather(packet)
+        // case .telemetry:
+        //     return decodeAPRSTelemetry(content)
+        // case .object:
+        //     return decodeAPRSObject(content)
+        // case .item:
+        //     return decodeAPRSItem(content)
+        // case .query:
+        //     return decodeAPRSQuery(content)
+        // case .status:
+        //     return decodeAPRSStatus(content)
         default:
             return nil
+        }
     }
-}
-
-/**
- * Decode an APRS position (compressed) with no timestamp.
- * Example: "!4903.50N/07201.75W-"
- */
-func parseAPRSPositionUncompressedNoTimestamp(from: String) -> PositionNoTimestampPacket? {
-    let capturePattern = #"^([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
-    let matches = regexMatch(string: from, pattern: capturePattern)
-
-    guard var latitude = Double(matches[0].dropLast()) else {
-        return nil
-    }
-    if matches[0].last == "S" {
-        latitude = -latitude
-    }
-
-
-    guard var longitude = Double(matches[2].dropLast()) else {
-        return nil
-    }
-    if matches[2].last == "W" {
-        longitude = -longitude
-    }
-
-    let symbolTable = matches[1].first
-    let symbolCode = matches[3].first
-
-    return PositionNoTimestampPacket(
-        latitude: latitude,
-        longitude: longitude,
-        symbolTable: symbolTable,
-        symbolCode: symbolCode,
-        // TODO: Get comment
-        comment: nil
-    )
-}
-
-/**
- * Decode an APRS position (compressed) with no timestamp.
- * Example: "!/5L!!<*e7>7P["
- */
-func parseAPRSPositionCompressedNoTimestamp(from content: String) -> PositionNoTimestampPacket? {
-    // Compressed position with no timestamp format: !/5L!!<*e7>7P[
-    let symbolTable = content[content.index(content.startIndex, offsetBy: 0)]
-    let encodedLat = content[content.index(content.startIndex, offsetBy: 1)...content.index(content.startIndex, offsetBy: 5)]
-    let encodedLon = content[content.index(content.startIndex, offsetBy: 6)...content.index(content.startIndex, offsetBy: 10)]
-    let symbolCode = content[content.index(content.startIndex, offsetBy: 12)]
-
-    let latitude = decodeBase91(encodedLat)
-    let longitude = decodeBase91(encodedLon)
-
-    return PositionNoTimestampPacket(
-        latitude: latitude,
-        longitude: longitude,
-        symbolTable: symbolTable,
-        symbolCode: symbolCode,
-        // TODO: Comment
-        comment: nil
-    )
-}
-
-func parseAPRSPositionWithTimestampPacket(from: String) -> PositionWithTimestampPacket? {
-    switch from.count {
-        case 26:
-            return parseAPRSPositionUncompressedWithTimestamp(from: from)
-        case 20:
-            return parseAPRSPositionCompressedWithTimestamp(from: from)
-        default:
-            return nil
-    }
-}
-
-/**
- * Decode an APRS position (uncompressed) with a timestamp.
- * Exmaple: "@092345z4903.50N/07201.75W-"
- */
-func parseAPRSPositionUncompressedWithTimestamp(from: String) -> PositionWithTimestampPacket? {
-
-    // Position with timestamp format: @HHMMSSzDDMM.mmN/DDDMM.mmW/S
-    let capturePattern = #"^([0-9]{6})z([0-9]{4}\.[0-9]{2}[NS])(.)([0-9]{5}\.[0-9]{2}[EW])(.)$"#
-    let matches = regexMatch(string: from, pattern: capturePattern)
-
-    let timestamp = matches[0]
-    guard var latitude = Double(matches[1].dropLast()) else {
-        return nil
-    }
-    if matches[1].last == "S" {
-        latitude = -latitude
-    }
-
-    let symbolTable = matches[2].first
-    guard var longitude = Double(matches[3].dropLast()) else {
-        return nil
-    }
-    if matches[3].last == "W" {
-        longitude = -longitude
-    }
-    guard let symbolCode = matches[4].first else {
-        return nil
-    }
-
-    guard let timestamp = parseAPRSTimestamp(timestamp) else {
-        return nil
-    }
-
-    return PositionWithTimestampPacket(
-        latitude: latitude,
-        longitude: longitude,
-        timestamp: timestamp,
-        symbolTable: symbolTable,
-        symbolCode: symbolCode,
-        // TODO: This isn't correct.
-        comment: nil
-    )
-}
-
-/**
- * Decode an APRS position (compressed) with no timestamp.
- * Example: "@092345z/5L!!<*e7>7P["
- */
-func parseAPRSPositionCompressedWithTimestamp(from: String) -> PositionWithTimestampPacket? {
-    // Compressed position with timestamp format: @HHMMSSz/5L!!<*e7>7P[
-    let timestamp = String(from.prefix(6))
-    let symbolTable = from[from.index(from.startIndex, offsetBy: 7)]
-    let encodedLat = from[from.index(from.startIndex, offsetBy: 7)...from.index(from.startIndex, offsetBy: 11)]
-    let encodedLon = from[from.index(from.startIndex, offsetBy: 12)...from.index(from.startIndex, offsetBy: 16)]
-    let symbolCode = from[from.index(from.startIndex, offsetBy: 19)]
-    let latitude = decodeBase91(encodedLat)
-    let longitude = decodeBase91(encodedLon)
-    guard let timestamp = parseAPRSTimestamp(timestamp) else {
-        return nil
-    }
-
-    return PositionWithTimestampPacket(
-        latitude: latitude,
-        longitude: longitude,
-        timestamp: timestamp,
-        symbolTable: symbolTable,
-        symbolCode: symbolCode,
-        comment: nil
-    )
-}
-
-func parseAPRSTimestamp(_ timestamp: String) -> Date? {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HHmmss"
-    return formatter.date(from: timestamp)
 }
 
 func decodeBase91(_ encoded: Substring) -> Double {
@@ -525,44 +581,6 @@ func decodeBase91(_ encoded: Substring) -> Double {
     let decimalDegrees = Double(degrees) + Double(minutes) / 60.0 + seconds / 3600.0
 
     return decimalDegrees
-}
-
-/**
- * Decode an APRS weather report.
- * Example: "_10090556c220s004g005t077r000p000P000h50b09900" 
- */
-func parseAPRSWeatherReport(from content: String) -> WeatherPacket? {
-    // Example: "_10090556c220s004g005t077r000p000P000h50b09900"
-    // Remove leading underscore if present
-    let data = content.hasPrefix("_") ? String(content.dropFirst()) : content
-
-    // You might parse substrings more rigorously here.
-    // For demonstration, we'll extract some fields by searching for letter markers.
-    let windDirection = matchAfterPrefix(data, prefix: "c")
-    let windSpeed     = matchAfterPrefix(data, prefix: "s")
-    let windGust      = matchAfterPrefix(data, prefix: "g")
-    let tempF         = matchAfterPrefix(data, prefix: "t")
-    let rainLastHour  = matchAfterPrefix(data, prefix: "r")
-    let rain24        = matchAfterPrefix(data, prefix: "p")
-    let rainMidnight  = matchAfterPrefix(data, prefix: "P")
-    let humidity      = matchAfterPrefix(data, prefix: "h")
-    let baro          = matchAfterPrefix(data, prefix: "b")
-
-    // Return as a simple message (expand APRSMessage if needed for more fields).
-    return WeatherPacket(
-        latitude: nil,
-        longitude: nil,
-        windDirection: Int(windDirection ?? ""),
-        windSpeed: Int(windSpeed ?? ""),
-        windGust: Int(windGust ?? ""),
-        temperatureF: Double(tempF ?? ""),
-        rainfallLastHour: Double(rainLastHour ?? ""),
-        rainfallLast24h: Double(rain24 ?? ""),
-        rainfallSinceMidnight: Double(rainMidnight ?? ""),
-        humidity: Int(humidity ?? ""),
-        pressure: Double(baro ?? ""),
-        comment: nil
-    )
 }
 
 // Utility to find digits after a known letter. Adjust to parse the exact number of digits if needed.
