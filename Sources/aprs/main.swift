@@ -20,16 +20,12 @@ class TNC: KissTncBleManagerDelegate {
                     print("Failed to decode APRS string.")
                     return
                 }
-                let aprsData = decodeAPRS(aprsString!)
-                print([
-                    String(describing:aprsData.type),
-                    ax25Packet.source.callSign,
-                    ax25Packet.destination.callSign,
-                    aprsData.sender ?? "",
-                    aprsData.receiver ?? "",
-                    ax25Packet.digipeaters.map { $0.callSign }.joined(separator: " "),
-                    aprsData.content,
-                ].joined(separator: ", "))
+                guard let packet = parseAPRSPacket(from: aprsString!) else {
+                    print("Failed to parse APRS packet.")
+                    print(aprsString!)
+                    return
+                }
+                print(packet.description)
             } catch {
                 print("Failed to decode AX.25 frame: \(error)")
             }
