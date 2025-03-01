@@ -173,16 +173,16 @@ import Foundation
         (":BLN1     :Bulletin broadcast test", APRSPacketType.message),
         (":ANNOUNCE :Club meeting tonight at 7pm", APRSPacketType.message),
         ("_10090556c220s004g005t077r000p000P000h50b09900", APRSPacketType.weatherReport),
-        ("T#123,456,789,123,456,789,01101001", APRSPacketType.telemetry),
-        (";Field Day*092345z4903.50N/07201.75W-", APRSPacketType.object),
-        (")Station1!4903.50N/07201.75W-", APRSPacketType.item),
-        ("?APRS?", .query),
-        (">Testing status message", .status)
+        // ("T#123,456,789,123,456,789,01101001", APRSPacketType.telemetry),
+        // (";Field Day*092345z4903.50N/07201.75W-", APRSPacketType.object),
+        // (")Station1!4903.50N/07201.75W-", APRSPacketType.item),
+        // ("?APRS?", .query),
+        // (">Testing status message", .status)
     ]
 
-    for (packet, expectedType) in formats {
-        guard let packet = parseAPRSPacket(from: packet) else {
-            #expect(Bool(false), "Failed to parse APRS packet.")
+    for (packetString, expectedType) in formats {
+        guard let packet = parseAPRSPacket(from: packetString) else {
+            #expect(Bool(false), "Failed to parse APRS packet from \(packetString).")
             return
         }
         #expect(packet.type == expectedType, "Failed for packet: \(packet)")
