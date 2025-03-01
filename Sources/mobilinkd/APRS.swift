@@ -13,7 +13,9 @@ public struct MessagePacket {
     public let type: APRSPacketType = .message
     public var description: String {
         return """
-        \(self.type.rawValue)
+        \(self.type.rawValue)\
+        \(self.toCallsign.padding(toLength: 9, withPad: " ", startingAt: 0)):\
+        \(self.messageText)
         """
     }
 
@@ -100,8 +102,8 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
         let encodedLon = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 6)...rawValue.index(rawValue.startIndex, offsetBy: 10)]
         let symbolCode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 12)]
 
-        let latitude = decodeBase91(encodedLat)
-        let longitude = decodeBase91(encodedLon)
+        let latitude = decodeBase91(String(encodedLat))
+        let longitude = decodeBase91(String(encodedLon))
 
         return PositionNoTimestampPacket(
             latitude: latitude,
@@ -171,8 +173,8 @@ public struct PositionWithTimestampPacket {
         return isCompressed ? """
         \(self.type.rawValue)\
         \(timestampString)z\
-        \(encodeBase91(Double(latitude)))\
         \(symbolTable ?? " ")\
+        \(encodeBase91(Double(latitude)))\
         \(encodeBase91(Double(longitude)))\
         \(symbolCode ?? " ")\
         \(comment ?? "")
@@ -224,8 +226,8 @@ public struct PositionWithTimestampPacket {
         let encodedLat = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 7)...rawValue.index(rawValue.startIndex, offsetBy: 11)]
         let encodedLon = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 12)...rawValue.index(rawValue.startIndex, offsetBy: 16)]
         let symbolCode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 19)]
-        let latitude = decodeBase91(encodedLat)
-        let longitude = decodeBase91(encodedLon)
+        let latitude = decodeBase91(String(encodedLat))
+        let longitude = decodeBase91(String(encodedLon))
         guard let timestamp = Self.parseTimestamp(timestamp) else {
             return nil
         }
@@ -331,6 +333,7 @@ public struct PositionWithMessagingPacket {
 
 // MARK: - Weather
 public struct WeatherPacket {
+    public let timestamp: Date?
     public let latitude: Double?
     public let longitude: Double?
     public let windDirection: Int?
@@ -346,9 +349,43 @@ public struct WeatherPacket {
 
     public let type: APRSPacketType = .weatherReport
     public var description: String {
-        return """
-        \(self.type.rawValue)
-        """
+        var description  = "\(self.type.rawValue)"
+        if let timestamp = timestamp {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyMMddHHmm"
+            description += formatter.string(from: timestamp)
+        }
+        if let windDirection = windDirection {
+            description += "c\(windDirection)"
+        }
+        if let windSpeed = windSpeed {
+            description += "s\(String(format: "%03d", windSpeed))"
+        }
+        if let windGust = windGust {
+            description += "g\(String(format: "%03d", windGust))"
+        }
+        if let temperatureF = temperatureF {
+            description += "t\(String(format: "%03d", Int(temperatureF)))"
+        }
+        if let rainfallLastHour = rainfallLastHour {
+            description += "r\(String(format: "%03d", Int(rainfallLastHour)))"
+        }
+        if let rainfallLast24h = rainfallLast24h {
+            description += "p\(String(format: "%03d", Int(rainfallLast24h)))"
+        }
+        if let rainfallSinceMidnight = rainfallSinceMidnight {
+            description += "P\(String(format: "%03d", Int(rainfallSinceMidnight)))"
+        }
+        if let humidity = humidity {
+            description += "h\(humidity)"
+        }
+        if let pressure = pressure {
+            description += "b\(String(format: "%05d", Int(pressure)))"
+        }
+        if let comment = comment {
+            description += "\(comment)"
+        }
+        return description
     }
 
     /**
@@ -359,7 +396,19 @@ public struct WeatherPacket {
 
         // Example: "_10090556c220s004g005t077r000p000P000h50b09900"
         // Remove leading underscore if present
-        let data = rawValue.hasPrefix("_") ? String(rawValue.dropFirst()) : rawValue
+        var data = rawValue.hasPrefix("_") ? String(rawValue.dropFirst()) : rawValue
+
+        var timestampString : String? = nil
+
+        let regex = try! NSRegularExpression(pattern: "^([0-9]*)(.*)$")
+        if let match = regex.firstMatch(in: data, options: [], range: NSRange(location: 0, length: data.utf16.count)) {
+            if let timestampRange = Range(match.range(at: 1), in: data) {
+                timestampString = String(data[timestampRange])
+            }
+            if let nonTimestampRange = Range(match.range(at: 2), in: data) {
+                data = String(data[nonTimestampRange])
+            }
+        }
 
         let windDirection = matchAfterPrefix(data, prefix: "c")
         let windSpeed     = matchAfterPrefix(data, prefix: "s")
@@ -370,6 +419,14 @@ public struct WeatherPacket {
         let rainMidnight  = matchAfterPrefix(data, prefix: "P")
         let humidity      = matchAfterPrefix(data, prefix: "h")
         let baro          = matchAfterPrefix(data, prefix: "b")
+
+        if timestampString == nil {
+            self.timestamp = nil
+        } else {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyMMddHHmm"
+            self.timestamp = formatter.date(from: timestampString!)
+        }
 
         self.latitude = nil
         self.longitude = nil
@@ -615,7 +672,7 @@ public enum APRSPacket: CustomStringConvertible {
     }
 }
 
-func decodeBase91(_ encoded: Substring) -> Double {
+public func decodeBase91(_ encoded: String) -> Double {
     let base91Chars = Array(
         "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
     )
@@ -635,7 +692,7 @@ func decodeBase91(_ encoded: Substring) -> Double {
     return decimalDegrees
 }
 
-func encodeBase91(_ value: Double) -> String {
+public func encodeBase91(_ value: Double) -> String {
     let degrees = Int(value)
     let minutes = Int((value - Double(degrees)) * 60)
     let seconds = Int(((value - Double(degrees)) * 60 - Double(minutes)) * 60)

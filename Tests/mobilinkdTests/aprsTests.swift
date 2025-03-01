@@ -120,7 +120,7 @@ import Foundation
 }
 
 @Test func testAPRSWeatherReport() throws {
-    let packetString = "_10090556c220s004g005t077r000p000P000h50b09900" 
+    let packetString = "_2503011234c220s004g005t077r000p000P000h50b09900" 
     guard let packet = APRSPacket(rawValue: packetString),
      case .weather(let weatherPacket) = packet else {
         #expect(Bool(false), "Failed to parse APRS packet.")
@@ -182,7 +182,7 @@ import Foundation
         (":BLN1CALL :Testing 123", APRSPacketType.message),
         (":BLN1     :Bulletin broadcast test", APRSPacketType.message),
         (":ANNOUNCE :Club meeting tonight at 7pm", APRSPacketType.message),
-        ("_10090556c220s004g005t077r000p000P000h50b09900", APRSPacketType.weatherReport),
+        ("_2503011234c220s004g005t077r000p000P000h50b09900", APRSPacketType.weatherReport),
         ("T#123,456,789,123,456,789,01101001", APRSPacketType.telemetry),
         // (";Field Day*092345z4903.50N/07201.75W-", APRSPacketType.object),
         // (")Station1!4903.50N/07201.75W-", APRSPacketType.item),
@@ -199,16 +199,32 @@ import Foundation
     }
 }
 
+@Test func testEncodeBase91() throws {
+    let values = [
+        40000.0,
+        70000.0,
+        100000.0,
+        10284.36311,
+        12842.19420,
+    ]
+
+    for value in values {
+        let encoded = encodeBase91(value)
+        let decoded = decodeBase91(encoded)
+        #expect(abs(value - decoded) < 0.002)
+    }
+}
+
 @Test func testAPRSStrings() throws {
     let packetStrings = [
         "@092345z4903.50N/07201.75W-",
         "!4903.50N/07201.75W-",
         // "@092345z/5L!!<*e7>7P[",
         // "!/5L!!<*e7>7P[",
-        // ":BLN1CALL :Testing 123",
-        // ":BLN1     :Bulletin broadcast test",
-        // ":ANNOUNCE :Club meeting tonight at 7pm",
-        // "_10090556c220s004g005t077r000p000P000h50b09900",
+        ":BLN1CALL :Testing 123",
+        ":BLN1     :Bulletin broadcast test",
+        ":ANNOUNCE :Club meeting tonight at 7pm",
+        "_2503011234c220s004g005t077r000p000P000h50b09900",
         // "T#123,456,789,123,456,789,01101001",
         // ";Field Day*092345z4903.50N/07201.75W-",
         // ")Station1!4903.50N/07201.75W-",
