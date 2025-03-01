@@ -44,24 +44,35 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
     public let symbolCode: Character?
     public let comment: String?
 
+    public var isCompressed: Bool = false
     public var type: APRSPacketType = .positionNoTimestamp
     public var description: String {
-        return """
+        return isCompressed ? """
         \(self.type.rawValue)\
-        \(String(format: "%08.4f", latitude))\
+        \(encodeBase91(Double(latitude)))\
         \(symbolTable ?? " ")\
-        \(String(format: "%09.4f", longitude))\
+        \(encodeBase91(Double(longitude)))\
+        \(symbolCode ?? " ")\
+        \(comment ?? "")
+        """ : """
+        \(self.type.rawValue)\
+        \(String(format: "%07.2f", abs(latitude)))\
+        \(latitude > 0 ? "N" : "S")\
+        \(symbolTable ?? " ")\
+        \(String(format: "%08.2f", abs(longitude)))\
+        \(longitude > 0 ? "E" : "W")\
         \(symbolCode ?? " ")\
         \(comment ?? "")
         """
     }
 
-    public init(latitude: Double, longitude: Double, symbolTable: Character?, symbolCode: Character?, comment: String?) {
+    public init(latitude: Double, longitude: Double, symbolTable: Character?, symbolCode: Character?, comment: String?, isCompressed: Bool = false) {
         self.latitude = latitude
         self.longitude = longitude
         self.symbolTable = symbolTable
         self.symbolCode = symbolCode
         self.comment = comment
+        self.isCompressed = isCompressed
     }
 
     public init?(rawValue: String) {
@@ -98,7 +109,8 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
             symbolTable: symbolTable,
             symbolCode: symbolCode,
             // TODO: Comment
-            comment: nil
+            comment: nil,
+            isCompressed: Bool(true)
         )
     }
 
@@ -133,7 +145,8 @@ public struct PositionNoTimestampPacket : CustomStringConvertible {
             symbolTable: symbolTable,
             symbolCode: symbolCode,
             // TODO: Get comment
-            comment: nil
+            comment: nil,
+            isCompressed: Bool(false)
         )
     }
 
@@ -148,29 +161,42 @@ public struct PositionWithTimestampPacket {
     public let symbolCode: Character?
     public let comment: String?
 
+    public var isCompressed: Bool = false
     public var type: APRSPacketType = .positionWithTimestamp
     public var description: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "HHmmss"
         let timestampString = formatter.string(from: timestamp)
-        return """
+
+        return isCompressed ? """
         \(self.type.rawValue)\
-        \(timestampString)\
-        \(String(format: "%08.4f", latitude))\
+        \(timestampString)z\
+        \(encodeBase91(Double(latitude)))\
         \(symbolTable ?? " ")\
-        \(String(format: "%09.4f", longitude))\
+        \(encodeBase91(Double(longitude)))\
+        \(symbolCode ?? " ")\
+        \(comment ?? "")
+        """ : """
+        \(self.type.rawValue)\
+        \(timestampString)z\
+        \(String(format: "%07.2f", abs(latitude)))\
+        \(latitude > 0 ? "N" : "S")\
+        \(symbolTable ?? " ")\
+        \(String(format: "%08.2f", abs(longitude)))\
+        \(longitude > 0 ? "E" : "W")\
         \(symbolCode ?? " ")\
         \(comment ?? "")
         """
     }
 
-    public init(latitude: Double, longitude: Double, timestamp: Date, symbolTable: Character?, symbolCode: Character?, comment: String?) {
+    public init(latitude: Double, longitude: Double, timestamp: Date, symbolTable: Character?, symbolCode: Character?, comment: String?, isCompressed: Bool = false) {
         self.latitude = latitude
         self.longitude = longitude
         self.timestamp = timestamp
         self.symbolTable = symbolTable
         self.symbolCode = symbolCode
         self.comment = comment
+        self.isCompressed = isCompressed
     }
 
     public init?(rawValue: String) {
@@ -210,7 +236,8 @@ public struct PositionWithTimestampPacket {
             timestamp: timestamp,
             symbolTable: symbolTable,
             symbolCode: symbolCode,
-            comment: nil
+            comment: nil,
+            isCompressed: Bool(true)
         )
     }
 
@@ -254,7 +281,8 @@ public struct PositionWithTimestampPacket {
             symbolTable: symbolTable,
             symbolCode: symbolCode,
             // TODO: This isn't correct.
-            comment: nil
+            comment: nil,
+            isCompressed: Bool(false)
         )
 
     }
@@ -605,6 +633,28 @@ func decodeBase91(_ encoded: Substring) -> Double {
     let decimalDegrees = Double(degrees) + Double(minutes) / 60.0 + seconds / 3600.0
 
     return decimalDegrees
+}
+
+func encodeBase91(_ value: Double) -> String {
+    let degrees = Int(value)
+    let minutes = Int((value - Double(degrees)) * 60)
+    let seconds = Int(((value - Double(degrees)) * 60 - Double(minutes)) * 60)
+
+    let base91Chars = Array(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"
+    )
+
+    let encoded = degrees * 380926 + minutes * 6351 + seconds * 105
+
+    var result = ""
+    var encodedValue = encoded
+    while encodedValue > 0 {
+        let index = encodedValue % 91
+        result = String(base91Chars[index]) + result
+        encodedValue /= 91
+    }
+
+    return result
 }
 
 // Utility to find digits after a known letter. Adjust to parse the exact number of digits if needed.

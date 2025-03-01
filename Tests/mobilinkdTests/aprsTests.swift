@@ -183,7 +183,7 @@ import Foundation
         (":BLN1     :Bulletin broadcast test", APRSPacketType.message),
         (":ANNOUNCE :Club meeting tonight at 7pm", APRSPacketType.message),
         ("_10090556c220s004g005t077r000p000P000h50b09900", APRSPacketType.weatherReport),
-        // ("T#123,456,789,123,456,789,01101001", APRSPacketType.telemetry),
+        ("T#123,456,789,123,456,789,01101001", APRSPacketType.telemetry),
         // (";Field Day*092345z4903.50N/07201.75W-", APRSPacketType.object),
         // (")Station1!4903.50N/07201.75W-", APRSPacketType.item),
         // ("?APRS?", .query),
@@ -197,4 +197,31 @@ import Foundation
         }
         #expect(packet.type == expectedType, "Failed for packet: \(packet)")
     }
+}
+
+@Test func testAPRSStrings() throws {
+    let packetStrings = [
+        "@092345z4903.50N/07201.75W-",
+        "!4903.50N/07201.75W-",
+        // "@092345z/5L!!<*e7>7P[",
+        // "!/5L!!<*e7>7P[",
+        // ":BLN1CALL :Testing 123",
+        // ":BLN1     :Bulletin broadcast test",
+        // ":ANNOUNCE :Club meeting tonight at 7pm",
+        // "_10090556c220s004g005t077r000p000P000h50b09900",
+        // "T#123,456,789,123,456,789,01101001",
+        // ";Field Day*092345z4903.50N/07201.75W-",
+        // ")Station1!4903.50N/07201.75W-",
+        // "?APRS?",
+        // ">Testing status message",
+    ]
+
+    for packetString in packetStrings {
+        guard let packet = APRSPacket(rawValue: packetString) else {
+            #expect(Bool(false), "Failed to parse APRS packet from \(packetString).")
+            return
+        }
+        #expect(packetString == packet.description)
+    }
+
 }
