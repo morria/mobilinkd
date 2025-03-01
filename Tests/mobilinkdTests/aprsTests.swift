@@ -144,7 +144,17 @@ import Foundation
 }
 
 @Test func testAPRSTelemetry() throws {
-    // T#123,456,789,123,456,789,01101001
+    let packetString = "T#123,456,789,123,456,789,01101001"
+    guard let packet = APRSPacket(rawValue: packetString),
+     case .telemetry(let telemetryPacket) = packet else {
+        #expect(Bool(false), "Failed to parse APRS packet.")
+        return
+    }
+    #expect(telemetryPacket.type == APRSPacketType.telemetry)
+    #expect(telemetryPacket.sequenceNumber == 123)
+    #expect(telemetryPacket.analogValues == [456, 789, 123, 456, 789])
+    #expect(telemetryPacket.digitalValues == [false, true, true, false, true, false, false, true])
+    #expect(telemetryPacket.comment == nil)
 }
 
 @Test func testAPRSObject() throws {

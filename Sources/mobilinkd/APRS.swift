@@ -381,10 +381,31 @@ public struct TelemetryPacket {
     public let comment: String?
 
     public let type: APRSPacketType = .telemetry
+
+    // Example: "T#123,456,789,012,345
     public var description: String {
         return """
-        \(self.type.rawValue)
+        \(self.type.rawValue)#\
+        \(self.sequenceNumber),\
+        \(self.analogValues.map { String($0) }.joined(separator: ",")),\
+        \(self.digitalValues.map { $0 ? "1" : "0" }.joined(separator: ""))
         """
+    }
+
+    public init?(rawValue: String) {
+        guard let valuesString = rawValue.split(separator: "#").last else {
+            return nil
+        }
+
+        let parts = valuesString.split(separator: ",")
+        guard parts.count >= 1 else {
+            return nil
+        }
+
+        self.sequenceNumber = Int(parts[0]) ?? 0
+        self.digitalValues = parts.last?.map { $0 == "1" } ?? []
+        self.analogValues = parts[1..<parts.count-1].compactMap { Double($0) }
+        self.comment = nil
     }
 }
 
@@ -547,8 +568,11 @@ public enum APRSPacket: CustomStringConvertible {
                 return nil
             }
             self = .weather(packet)
-        // case .telemetry:
-        //     return decodeAPRSTelemetry(content)
+        case .telemetry:
+            guard let packet = TelemetryPacket(rawValue: content) else {
+                return nil
+            }
+            self = .telemetry(packet)
         // case .object:
         //     return decodeAPRSObject(content)
         // case .item:
