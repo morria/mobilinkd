@@ -231,20 +231,24 @@ public struct PositionWithTimestampPacket {
      * Example: "@092345z/5L!!<*e7>7P["
      */
     private static func fromCompressed(rawValue: String) -> Self? {
+
         // Compressed position with timestamp format: @HHMMSSz/5L!!<*e7>7P[
-        let timestamp = String(rawValue.prefix(6))
-        let symbolTable = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 7)]
-        let encodedLat = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 7)...rawValue.index(rawValue.startIndex, offsetBy: 11)]
-        let encodedLon = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 12)...rawValue.index(rawValue.startIndex, offsetBy: 16)]
-        let symbolCode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 19)]
-        let latitude = decodeBase91(String(encodedLat))
-        let longitude = decodeBase91(String(encodedLon))
+        let capturePattern = #"^([0-9]{6})(.)(.{4})(.{4})(.)(.*)$"#
+        let matches = regexMatch(string: rawValue, pattern: capturePattern)
 
-        let timeMode = rawValue[rawValue.index(rawValue.startIndex, offsetBy: 6)]
-
+        let timestamp = matches[0]
+        let timeMode = matches[1].first!
         guard let timestamp = Self.parseTimestamp(timestamp, timeMode: timeMode) else {
             return nil
         }
+
+        guard let symbolTable = matches[2].first else { return nil }
+
+        let latitude = decodeBase91(String(matches[3]))
+        let longitude = decodeBase91(String(matches[4]))
+        guard let symbolCode = matches[5].first else { return nil }
+
+        let comment = matches[6]
 
         return PositionWithTimestampPacket(
             latitude: latitude,
@@ -252,7 +256,7 @@ public struct PositionWithTimestampPacket {
             timestamp: timestamp,
             symbolTable: symbolTable,
             symbolCode: symbolCode,
-            comment: nil,
+            comment: comment,
             isCompressed: Bool(true),
             timeMode: timeMode
         )
